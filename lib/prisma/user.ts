@@ -14,7 +14,7 @@ export async function login(credentials: any) {
     const user = await prisma.user.findFirst({ where: { email: credentials.email } });
     if (user?.password === credentials.password) return user;
   } catch (error: any) {
-    return { error };
+    return error;
   }
 }
 

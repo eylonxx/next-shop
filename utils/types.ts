@@ -4,3 +4,7 @@ export interface AccessTokenPayload {
 export interface RefreshTokenPayload {
   userId: string;
 }
+export enum Cookies {
+  AccessToken = 'access',
+  RefreshToken = 'refresh',
+}
