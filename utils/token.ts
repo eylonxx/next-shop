@@ -2,8 +2,9 @@ import { User } from '@prisma/client';
 import { AccessTokenPayload, Cookies, RefreshTokenPayload } from './types';
 import jwt from 'jsonwebtoken';
 import type { NextApiResponse } from 'next';
-import { getCookies, getCookie, setCookie, removeCookies } from 'cookies-next';
 import { OptionsType } from 'cookies-next/lib/types';
+import { setCookie } from './cookies';
+import { serialize } from 'cookie';
 
 const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET!;
 const refreshTokenSecret = process.env.REFRESH_TOKEN_SECRET!;
@@ -49,6 +50,13 @@ const accessTokenCookieOptions: OptionsType = {
 };
 
 export function setTokens(res: NextApiResponse, access: string, refresh?: string) {
-  setCookie(Cookies.AccessToken, access, { res, ...accessTokenCookieOptions });
-  if (refresh) setCookie(Cookies.RefreshToken, access, { res, ...refreshTokenCookieOptions });
+  if (!refresh) {
+    // setCookie(res, Cookies.AccessToken, access, accessTokenCookieOptions);
+    serialize(Cookies.AccessToken, access, accessTokenCookieOptions);
+  } else {
+    res.setHeader('Set-Cookie', [
+      serialize(Cookies.AccessToken, access, accessTokenCookieOptions),
+      serialize(Cookies.RefreshToken, refresh, refreshTokenCookieOptions),
+    ]);
+  }
 }
