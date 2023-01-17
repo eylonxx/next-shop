@@ -10,12 +10,9 @@ export async function getUsers() {
 }
 
 export async function login(credentials: any) {
-  try {
-    const user = await prisma.user.findFirst({ where: { email: credentials.email } });
-    if (user?.password === credentials.password) return user;
-  } catch (error: any) {
-    return error;
-  }
+  const user = await prisma.user.findFirst({ where: { email: credentials.email } });
+  if (!user || user.password !== credentials.password) return null;
+  return user;
 }
 
 export async function createUser(user: any) {
@@ -28,12 +25,8 @@ export async function createUser(user: any) {
 }
 
 export async function getUserById(id: string) {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id },
-    });
-    return { user };
-  } catch (error: any) {
-    return { error };
-  }
+  const user = await prisma.user.findUnique({
+    where: { id },
+  });
+  return user;
 }

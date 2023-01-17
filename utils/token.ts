@@ -1,9 +1,8 @@
 import { User } from '@prisma/client';
-import { AccessTokenPayload, Cookies, RefreshTokenPayload } from './types';
+import { AccessToken, AccessTokenPayload, Cookies, RefreshToken, RefreshTokenPayload } from './types';
 import jwt from 'jsonwebtoken';
 import type { NextApiResponse } from 'next';
 import { OptionsType } from 'cookies-next/lib/types';
-import { setCookie } from './cookies';
 import { serialize } from 'cookie';
 
 const accessTokenSecret = process.env.ACCESS_TOKEN_SECRET!;
@@ -17,13 +16,13 @@ enum TokenExpiration {
 function signAccessToken(payload: AccessTokenPayload) {
   return jwt.sign(payload, accessTokenSecret, { expiresIn: TokenExpiration.Access });
 }
-function signRefreshToken(payload: AccessTokenPayload) {
-  return jwt.sign(payload, refreshTokenSecret, { expiresIn: TokenExpiration.Access });
+function signRefreshToken(payload: RefreshTokenPayload) {
+  return jwt.sign(payload, refreshTokenSecret, { expiresIn: TokenExpiration.Refresh });
 }
 
 export function buildTokens(user: User) {
   const accessPayload: AccessTokenPayload = { userId: user.id };
-  const refreshPayload: RefreshTokenPayload = { userId: user.id };
+  const refreshPayload: RefreshTokenPayload = { userId: user.id, version: user.tokenVersion };
 
   const accessToken = signAccessToken(accessPayload);
   const refreshToken = refreshPayload && signRefreshToken(refreshPayload);
@@ -51,12 +50,45 @@ const accessTokenCookieOptions: OptionsType = {
 
 export function setTokens(res: NextApiResponse, access: string, refresh?: string) {
   if (!refresh) {
-    // setCookie(res, Cookies.AccessToken, access, accessTokenCookieOptions);
-    serialize(Cookies.AccessToken, access, accessTokenCookieOptions);
+    res.setHeader('Set-Cookie', serialize(Cookies.AccessToken, access, accessTokenCookieOptions));
   } else {
     res.setHeader('Set-Cookie', [
       serialize(Cookies.AccessToken, access, accessTokenCookieOptions),
       serialize(Cookies.RefreshToken, refresh, refreshTokenCookieOptions),
     ]);
   }
+}
+
+export function verifyRefreshToken(token: string) {
+  return jwt.verify(token, refreshTokenSecret) as RefreshToken;
+}
+
+export function verifyAccessToken(token: string) {
+  try {
+    return jwt.verify(token, accessTokenSecret) as AccessToken;
+  } catch (error) {}
+}
+
+export function refreshTokens(current: RefreshToken, tokenVersion: number) {
+  if (tokenVersion !== current.version) throw 'Token revoked';
+  const accessPayload: AccessTokenPayload = { userId: current.userId };
+  const accessToken = signAccessToken(accessPayload);
+
+  let refreshPayload: RefreshTokenPayload | undefined;
+  const expiration = new Date(current.exp * 1000);
+  const now = new Date();
+  const secondsUntilExpiration = (expiration.getTime() - now.getTime()) / 1000;
+  if (secondsUntilExpiration < TokenExpiration.RefreshIfLessThan) {
+    refreshPayload = { userId: current.userId, version: tokenVersion };
+  }
+  const refreshToken = refreshPayload && signRefreshToken(refreshPayload);
+
+  return { accessToken, refreshToken };
+}
+
+export function clearTokens(res: NextApiResponse) {
+  res.setHeader('Set-Cookie', [
+    serialize(Cookies.AccessToken, '', { ...defaultCookieOptions, maxAge: 0 }),
+    serialize(Cookies.RefreshToken, '', { ...defaultCookieOptions, maxAge: 0 }),
+  ]);
 }
